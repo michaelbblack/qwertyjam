@@ -2,28 +2,6 @@ import * as Tone from 'tone';
 
 export type VoicePreset = 'piano' | 'organ' | 'pluck' | 'pad';
 
-const VOICE_CONFIGS: Record<VoicePreset, {
-  oscillator: { type: string };
-  envelope: { attack: number; decay: number; sustain: number; release: number };
-}> = {
-  piano: {
-    oscillator: { type: 'triangle8' },
-    envelope: { attack: 0.005, decay: 0.3, sustain: 0.4, release: 0.8 },
-  },
-  organ: {
-    oscillator: { type: 'sawtooth8' },
-    envelope: { attack: 0.01, decay: 0.2, sustain: 0.75, release: 0.3 },
-  },
-  pluck: {
-    oscillator: { type: 'square4' },
-    envelope: { attack: 0.001, decay: 0.35, sustain: 0.08, release: 0.4 },
-  },
-  pad: {
-    oscillator: { type: 'sine4' },
-    envelope: { attack: 0.06, decay: 0.4, sustain: 0.55, release: 1.5 },
-  },
-};
-
 export const GENRE_VOICE_MAP: Record<string, VoicePreset> = {
   'Classical': 'piano',
   'Rock': 'organ',
@@ -37,22 +15,12 @@ export class AudioEngine {
   private compressor: Tone.Compressor | null = null;
   private initialized = false;
   private _volume = 0.8;
-  private currentVoice: VoicePreset = 'piano';
 
   async init(): Promise<void> {
     if (this.initialized) return;
 
     await Tone.start();
-
-    // Verify audio context is running
-    const ctx = Tone.getContext();
-    if (ctx.state !== 'running') {
-      console.warn('AudioContext state after Tone.start():', ctx.state);
-      // Try to resume directly via the native AudioContext
-      if (typeof ctx.rawContext?.resume === 'function') {
-        await ctx.rawContext.resume();
-      }
-    }
+    console.log('[AudioEngine] Tone.start() complete, context state:', Tone.getContext().state);
 
     this.compressor = new Tone.Compressor({
       threshold: -20,
@@ -66,36 +34,32 @@ export class AudioEngine {
       wet: 0.2,
     }).connect(this.compressor);
 
-    // Wait for reverb impulse response to be generated —
-    // without this, the convolver has no buffer and produces silence
     await this.reverb.ready;
+    console.log('[AudioEngine] Reverb ready');
 
-    this.buildSynth(this.currentVoice);
-    this.initialized = true;
-  }
-
-  // Recreate the PolySynth with a new voice preset.
-  // Tone.js PolySynth.set() corrupts voices when changing oscillator type,
-  // so we dispose and rebuild instead.
-  private buildSynth(preset: VoicePreset): void {
-    if (!this.reverb) return;
-    this.synth?.dispose();
-    const config = VOICE_CONFIGS[preset];
-    // Clone config objects to prevent Tone.js internals from mutating VOICE_CONFIGS
     this.synth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: config.oscillator.type } as Tone.OmniOscillatorOptions,
-      envelope: { ...config.envelope },
+      oscillator: {
+        type: 'triangle8',
+      },
+      envelope: {
+        attack: 0.005,
+        decay: 0.3,
+        sustain: 0.4,
+        release: 0.8,
+      },
       volume: -6,
     }).connect(this.reverb);
     this.synth.maxPolyphony = 16;
+
     this.setVolume(this._volume);
+    this.initialized = true;
+    console.log('[AudioEngine] Init complete, synth created');
   }
 
-  setVoice(preset: VoicePreset): void {
-    if (preset === this.currentVoice && this.synth) return;
-    this.currentVoice = preset;
-    if (!this.initialized) return;
-    this.buildSynth(preset);
+  // Voice presets are accepted but don't change the synth for now
+  // (isolating whether voice switching is the cause of silence)
+  setVoice(_preset: VoicePreset): void {
+    // no-op for debugging
   }
 
   setVoiceForGenre(genre: string): void {
@@ -104,20 +68,27 @@ export class AudioEngine {
   }
 
   playNote(note: string, duration: string | number = '8n', velocity = 0.7): void {
-    if (!this.synth) return;
+    if (!this.synth) {
+      console.warn('[AudioEngine] playNote: no synth');
+      return;
+    }
     try {
       this.synth.triggerAttackRelease(note, duration, Tone.now(), velocity);
     } catch (e) {
-      console.error('playNote error:', e);
+      console.error('[AudioEngine] playNote error:', e);
     }
   }
 
   attackNote(note: string, velocity = 0.7): void {
-    if (!this.synth) return;
+    if (!this.synth) {
+      console.warn('[AudioEngine] attackNote: no synth');
+      return;
+    }
     try {
+      console.log('[AudioEngine] attackNote:', note, velocity);
       this.synth.triggerAttack(note, Tone.now(), velocity);
     } catch (e) {
-      console.error('attackNote error:', e);
+      console.error('[AudioEngine] attackNote error:', e);
     }
   }
 
@@ -126,7 +97,7 @@ export class AudioEngine {
     try {
       this.synth.triggerRelease(note, Tone.now());
     } catch (e) {
-      console.error('releaseNote error:', e);
+      console.error('[AudioEngine] releaseNote error:', e);
     }
   }
 
@@ -135,7 +106,7 @@ export class AudioEngine {
     try {
       this.synth.triggerAttackRelease('C2', '32n', Tone.now(), 0.15);
     } catch (e) {
-      console.error('playMissSound error:', e);
+      console.error('[AudioEngine] playMissSound error:', e);
     }
   }
 
@@ -151,7 +122,7 @@ export class AudioEngine {
           this.synth?.triggerAttackRelease('G7', '16n', Tone.now(), 0.3);
         }, 120);
       } catch (e) {
-        console.error('playComboSound error:', e);
+        console.error('[AudioEngine] playComboSound error:', e);
       }
     }
   }
@@ -166,12 +137,13 @@ export class AudioEngine {
         envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05 },
         volume: -12,
       }).toDestination();
+      console.log('[AudioEngine] Metronome synth created');
     }
     try {
       const note = accent ? 'C5' : 'C4';
       this.metronomeSynth.triggerAttackRelease(note, '32n', Tone.now());
     } catch (e) {
-      console.error('playMetronomeTick error:', e);
+      console.error('[AudioEngine] playMetronomeTick error:', e);
     }
   }
 
