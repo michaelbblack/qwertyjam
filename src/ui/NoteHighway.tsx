@@ -110,7 +110,7 @@ export function NoteHighway() {
       const lane = getNoteLane(note.note);
       const y = lane * laneH + laneH * 0.15;
       const noteH = laneH * 0.7;
-      const noteW = Math.max(30, (note.duration / lookAhead) * (W - strikeX));
+      const noteW = Math.max(44, (note.duration / lookAhead) * (W - strikeX));
 
       const color = getNoteColor(note.note);
 
@@ -119,12 +119,9 @@ export function NoteHighway() {
         const elapsed = (currentTime - (note.hitTime ?? currentTime)) * 4;
         const alpha = Math.max(0, 1 - elapsed);
         ctx.fillStyle = color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 20 * alpha;
         ctx.beginPath();
         ctx.roundRect(x, y, noteW, noteH, 6);
         ctx.fill();
-        ctx.shadowBlur = 0;
       } else if (note.grade === 'miss') {
         // Missed note — dark and dropping
         const elapsed = currentTime - note.time;
@@ -134,19 +131,23 @@ export function NoteHighway() {
         ctx.roundRect(x, y + drop, noteW, noteH, 6);
         ctx.fill();
       } else {
-        // Upcoming note
+        // Upcoming note — bright glow when close to strike zone
+        const glowAlpha = timeUntil < 0.5 ? 0.25 : 0.08;
+        ctx.fillStyle = color + Math.floor(glowAlpha * 255).toString(16).padStart(2, '0');
+        ctx.beginPath();
+        ctx.roundRect(x - 3, y - 3, noteW + 6, noteH + 6, 8);
+        ctx.fill();
+
         ctx.fillStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = timeUntil < 0.3 ? 15 : 5;
         ctx.beginPath();
         ctx.roundRect(x, y, noteW, noteH, 6);
         ctx.fill();
-        ctx.shadowBlur = 0;
 
-        // Key label on note
+        // Key label on note — large and high contrast
         const key = getNoteKey(note.note);
+        const fontSize = Math.min(22, noteH * 0.55);
         ctx.fillStyle = '#0a0e1a';
-        ctx.font = 'bold 14px "JetBrains Mono", monospace';
+        ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(key, x + noteW / 2, y + noteH / 2);

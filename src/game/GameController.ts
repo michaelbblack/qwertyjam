@@ -44,6 +44,9 @@ export class GameController {
   private listeners: GameEventCallback[] = [];
   private animFrameId: number | null = null;
   private countdownTimer: ReturnType<typeof setTimeout> | null = null;
+  private heldNotes: Map<string, string> = new Map(); // key -> note being sustained
+  metronomeEnabled = false;
+  private lastMetronomeBeat = -1;
 
   constructor() {
     this.audioEngine = new AudioEngine();
@@ -117,9 +120,14 @@ export class GameController {
     this.timingEngine.start();
 
     // Start input handling
+    this.heldNotes.clear();
+    this.lastMetronomeBeat = -1;
     this.inputHandler.start((event: KeyEvent) => {
-      if (event.type !== 'down') return;
-      this.handleKeyPress(event);
+      if (event.type === 'down') {
+        this.handleKeyPress(event);
+      } else if (event.type === 'up') {
+        this.handleKeyRelease(event);
+      }
     });
 
     // Start game loop
@@ -138,9 +146,10 @@ export class GameController {
     if (result) {
       const scoreState = this.scoreEngine.registerHit(result.grade);
 
-      // Play the note sound
+      // Sustain: start the note and track it for release
       if (result.grade !== 'miss') {
-        this.audioEngine.playNote(note, '8n', result.grade === 'perfect' ? 0.8 : 0.6);
+        this.audioEngine.attackNote(note, result.grade === 'perfect' ? 0.8 : 0.6);
+        this.heldNotes.set(event.key, note);
       } else {
         this.audioEngine.playMissSound();
       }
@@ -164,13 +173,32 @@ export class GameController {
         this.emit({ type: 'comboMilestone', data: scoreState.combo });
       }
     } else {
-      // Key pressed but no matching note nearby — play the note anyway (free play feel)
-      this.audioEngine.playNote(note, '8n', 0.3);
+      // Key pressed but no matching note nearby — play sustained note (free play feel)
+      this.audioEngine.attackNote(note, 0.3);
+      this.heldNotes.set(event.key, note);
+    }
+  }
+
+  private handleKeyRelease(event: KeyEvent): void {
+    const note = this.heldNotes.get(event.key);
+    if (note) {
+      this.audioEngine.releaseNote(note);
+      this.heldNotes.delete(event.key);
     }
   }
 
   private gameLoop = (): void => {
     if (this.state !== 'playing') return;
+
+    // Metronome
+    if (this.metronomeEnabled) {
+      const beat = Math.floor(this.timingEngine.getCurrentBeat());
+      if (beat > this.lastMetronomeBeat && beat >= 0) {
+        this.lastMetronomeBeat = beat;
+        const ts = this.currentSong?.timeSignature?.[0] ?? 4;
+        this.audioEngine.playMetronomeTick(beat % ts === 0);
+      }
+    }
 
     // Check for missed notes
     const missed = this.timingEngine.checkMissedNotes();
@@ -231,9 +259,13 @@ export class GameController {
     if (this.state !== 'paused') return;
     this.setState('playing');
     this.timingEngine.start();
+    this.heldNotes.clear();
     this.inputHandler.start((event: KeyEvent) => {
-      if (event.type !== 'down') return;
-      this.handleKeyPress(event);
+      if (event.type === 'down') {
+        this.handleKeyPress(event);
+      } else if (event.type === 'up') {
+        this.handleKeyRelease(event);
+      }
     });
     this.gameLoop();
   }

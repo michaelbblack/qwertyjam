@@ -9,6 +9,8 @@ export function GameScreen() {
   const countdownValue = useGameStore(s => s.countdownValue);
   const selectedSong = useGameStore(s => s.selectedSong);
   const returnToMenu = useGameStore(s => s.returnToMenu);
+  const metronome = useGameStore(s => s.metronome);
+  const toggleMetronome = useGameStore(s => s.toggleMetronome);
 
   return (
     <div style={{
@@ -35,21 +37,38 @@ export function GameScreen() {
             {selectedSong?.artist}
           </span>
         </div>
-        <button
-          onClick={returnToMenu}
-          style={{
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: '6px',
-            padding: '6px 14px',
-            color: 'rgba(255,255,255,0.5)',
-            fontSize: '11px',
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-          }}
-        >
-          Quit
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={toggleMetronome}
+            style={{
+              background: metronome ? 'rgba(96,165,250,0.15)' : 'rgba(255,255,255,0.06)',
+              border: `1px solid ${metronome ? '#60a5fa' : 'rgba(255,255,255,0.12)'}`,
+              borderRadius: '6px',
+              padding: '6px 14px',
+              color: metronome ? '#60a5fa' : 'rgba(255,255,255,0.5)',
+              fontSize: '11px',
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            Metronome {metronome ? 'ON' : 'OFF'}
+          </button>
+          <button
+            onClick={returnToMenu}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '6px',
+              padding: '6px 14px',
+              color: 'rgba(255,255,255,0.5)',
+              fontSize: '11px',
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            Quit
+          </button>
+        </div>
       </div>
 
       {/* HUD */}

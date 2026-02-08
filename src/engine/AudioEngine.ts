@@ -51,6 +51,24 @@ export class AudioEngine {
     }
   }
 
+  attackNote(note: string, velocity = 0.7): void {
+    if (!this.synth) return;
+    try {
+      this.synth.triggerAttack(note, undefined, velocity);
+    } catch {
+      // Ignore
+    }
+  }
+
+  releaseNote(note: string): void {
+    if (!this.synth) return;
+    try {
+      this.synth.triggerRelease(note);
+    } catch {
+      // Ignore
+    }
+  }
+
   playMissSound(): void {
     if (!this.synth) return;
     // Play a dissonant buzz for misses
@@ -79,6 +97,25 @@ export class AudioEngine {
     }
   }
 
+  private metronomeSynth: Tone.MembraneSynth | null = null;
+
+  playMetronomeTick(accent: boolean): void {
+    if (!this.metronomeSynth) {
+      this.metronomeSynth = new Tone.MembraneSynth({
+        pitchDecay: 0.008,
+        octaves: 2,
+        envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05 },
+        volume: -12,
+      }).toDestination();
+    }
+    try {
+      const note = accent ? 'C5' : 'C4';
+      this.metronomeSynth.triggerAttackRelease(note, '32n');
+    } catch {
+      // Ignore
+    }
+  }
+
   setVolume(level: number): void {
     this._volume = Math.max(0, Math.min(1, level));
     if (this.synth) {
@@ -100,9 +137,11 @@ export class AudioEngine {
     this.synth?.dispose();
     this.reverb?.dispose();
     this.compressor?.dispose();
+    this.metronomeSynth?.dispose();
     this.synth = null;
     this.reverb = null;
     this.compressor = null;
+    this.metronomeSynth = null;
     this.initialized = false;
   }
 }

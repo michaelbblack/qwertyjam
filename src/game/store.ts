@@ -39,10 +39,14 @@ interface GameStore {
   // Speed control
   speed: number;
 
+  // Metronome
+  metronome: boolean;
+
   // Actions
   selectSong: (song: Song, layer?: number) => void;
   startGame: () => Promise<void>;
   setSpeed: (speed: number) => void;
+  toggleMetronome: () => void;
   getResults: () => GameResults | null;
   returnToMenu: () => void;
 }
@@ -116,6 +120,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     lastGrade: null,
 
     speed: 1.0,
+    metronome: false,
 
     selectSong: (song, layer = 0) => {
       set({ selectedSong: song, selectedLayer: layer });
@@ -139,6 +144,12 @@ export const useGameStore = create<GameStore>((set, get) => {
     setSpeed: (speed) => {
       set({ speed });
       controller.setSpeed(speed);
+    },
+
+    toggleMetronome: () => {
+      const next = !get().metronome;
+      set({ metronome: next });
+      controller.metronomeEnabled = next;
     },
 
     getResults: () => controller.getResults(),
