@@ -8,7 +8,7 @@ const VOICE_CONFIGS: Record<VoicePreset, {
 }> = {
   piano: {
     oscillator: { type: 'triangle8' },
-    envelope: { attack: 0.005, decay: 1.0, sustain: 0.15, release: 1.2 },
+    envelope: { attack: 0.005, decay: 0.3, sustain: 0.4, release: 0.8 },
   },
   organ: {
     oscillator: { type: 'sawtooth8' },
@@ -44,6 +44,16 @@ export class AudioEngine {
 
     await Tone.start();
 
+    // Verify audio context is running
+    const ctx = Tone.getContext();
+    if (ctx.state !== 'running') {
+      console.warn('AudioContext state after Tone.start():', ctx.state);
+      // Try to resume directly via the native AudioContext
+      if (typeof ctx.rawContext?.resume === 'function') {
+        await ctx.rawContext.resume();
+      }
+    }
+
     this.compressor = new Tone.Compressor({
       threshold: -20,
       ratio: 4,
@@ -56,6 +66,10 @@ export class AudioEngine {
       wet: 0.2,
     }).connect(this.compressor);
 
+    // Wait for reverb impulse response to be generated —
+    // without this, the convolver has no buffer and produces silence
+    await this.reverb.ready;
+
     this.buildSynth(this.currentVoice);
     this.initialized = true;
   }
@@ -67,13 +81,12 @@ export class AudioEngine {
     if (!this.reverb) return;
     this.synth?.dispose();
     const config = VOICE_CONFIGS[preset];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const opts: any = {
-      oscillator: { type: config.oscillator.type },
-      envelope: config.envelope,
+    // Clone config objects to prevent Tone.js internals from mutating VOICE_CONFIGS
+    this.synth = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: config.oscillator.type } as Tone.OmniOscillatorOptions,
+      envelope: { ...config.envelope },
       volume: -6,
-    };
-    this.synth = new Tone.PolySynth(Tone.Synth, opts).connect(this.reverb);
+    }).connect(this.reverb);
     this.synth.maxPolyphony = 16;
     this.setVolume(this._volume);
   }
@@ -93,36 +106,36 @@ export class AudioEngine {
   playNote(note: string, duration: string | number = '8n', velocity = 0.7): void {
     if (!this.synth) return;
     try {
-      this.synth.triggerAttackRelease(note, duration, undefined, velocity);
-    } catch {
-      // Ignore invalid note errors
+      this.synth.triggerAttackRelease(note, duration, Tone.now(), velocity);
+    } catch (e) {
+      console.error('playNote error:', e);
     }
   }
 
   attackNote(note: string, velocity = 0.7): void {
     if (!this.synth) return;
     try {
-      this.synth.triggerAttack(note, undefined, velocity);
-    } catch {
-      // Ignore
+      this.synth.triggerAttack(note, Tone.now(), velocity);
+    } catch (e) {
+      console.error('attackNote error:', e);
     }
   }
 
   releaseNote(note: string): void {
     if (!this.synth) return;
     try {
-      this.synth.triggerRelease(note);
-    } catch {
-      // Ignore
+      this.synth.triggerRelease(note, Tone.now());
+    } catch (e) {
+      console.error('releaseNote error:', e);
     }
   }
 
   playMissSound(): void {
     if (!this.synth) return;
     try {
-      this.synth.triggerAttackRelease('C2', '32n', undefined, 0.15);
-    } catch {
-      // Ignore
+      this.synth.triggerAttackRelease('C2', '32n', Tone.now(), 0.15);
+    } catch (e) {
+      console.error('playMissSound error:', e);
     }
   }
 
@@ -130,15 +143,15 @@ export class AudioEngine {
     if (!this.synth) return;
     if (combo % 25 === 0 && combo > 0) {
       try {
-        this.synth.triggerAttackRelease('C7', '16n', undefined, 0.3);
+        this.synth.triggerAttackRelease('C7', '16n', Tone.now(), 0.3);
         setTimeout(() => {
-          this.synth?.triggerAttackRelease('E7', '16n', undefined, 0.3);
+          this.synth?.triggerAttackRelease('E7', '16n', Tone.now(), 0.3);
         }, 60);
         setTimeout(() => {
-          this.synth?.triggerAttackRelease('G7', '16n', undefined, 0.3);
+          this.synth?.triggerAttackRelease('G7', '16n', Tone.now(), 0.3);
         }, 120);
-      } catch {
-        // Ignore
+      } catch (e) {
+        console.error('playComboSound error:', e);
       }
     }
   }
@@ -156,9 +169,9 @@ export class AudioEngine {
     }
     try {
       const note = accent ? 'C5' : 'C4';
-      this.metronomeSynth.triggerAttackRelease(note, '32n');
-    } catch {
-      // Ignore
+      this.metronomeSynth.triggerAttackRelease(note, '32n', Tone.now());
+    } catch (e) {
+      console.error('playMetronomeTick error:', e);
     }
   }
 
