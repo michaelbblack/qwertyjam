@@ -56,28 +56,33 @@ export class AudioEngine {
       wet: 0.2,
     }).connect(this.compressor);
 
-    this.synth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'triangle8' },
-      envelope: { attack: 0.005, decay: 0.3, sustain: 0.4, release: 0.8 },
-      volume: -6,
-    }).connect(this.reverb);
-    this.synth.maxPolyphony = 16;
-
-    this.setVolume(this._volume);
+    this.buildSynth(this.currentVoice);
     this.initialized = true;
+  }
 
-    // Apply current voice preset
-    this.setVoice(this.currentVoice);
+  // Recreate the PolySynth with a new voice preset.
+  // Tone.js PolySynth.set() corrupts voices when changing oscillator type,
+  // so we dispose and rebuild instead.
+  private buildSynth(preset: VoicePreset): void {
+    if (!this.reverb) return;
+    this.synth?.dispose();
+    const config = VOICE_CONFIGS[preset];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const opts: any = {
+      oscillator: { type: config.oscillator.type },
+      envelope: config.envelope,
+      volume: -6,
+    };
+    this.synth = new Tone.PolySynth(Tone.Synth, opts).connect(this.reverb);
+    this.synth.maxPolyphony = 16;
+    this.setVolume(this._volume);
   }
 
   setVoice(preset: VoicePreset): void {
+    if (preset === this.currentVoice && this.synth) return;
     this.currentVoice = preset;
-    if (!this.synth) return;
-    const config = VOICE_CONFIGS[preset];
-    this.synth.set({
-      oscillator: config.oscillator as Tone.OmniOscillatorOptions,
-      envelope: config.envelope,
-    });
+    if (!this.initialized) return;
+    this.buildSynth(preset);
   }
 
   setVoiceForGenre(genre: string): void {
