@@ -34,9 +34,6 @@ export class AudioEngine {
       wet: 0.2,
     }).connect(this.compressor);
 
-    await this.reverb.ready;
-    console.log('[AudioEngine] Reverb ready');
-
     this.synth = new Tone.PolySynth(Tone.Synth, {
       oscillator: {
         type: 'triangle8',
