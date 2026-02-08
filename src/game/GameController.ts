@@ -80,6 +80,11 @@ export class GameController {
 
   async loadSong(song: Song, layerIndex = 0): Promise<void> {
     this.setState('loading');
+
+    // Release any sustained notes from a previous song
+    this.audioEngine.releaseAll();
+    this.heldNotes.clear();
+
     this.currentSong = song;
     this.currentLayer = layerIndex;
 
@@ -227,6 +232,8 @@ export class GameController {
   private endGame(): void {
     this.inputHandler.stop();
     this.timingEngine.stop();
+    this.audioEngine.releaseAll();
+    this.heldNotes.clear();
     if (this.animFrameId) {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
@@ -249,6 +256,8 @@ export class GameController {
     if (this.state !== 'playing') return;
     this.inputHandler.stop();
     this.timingEngine.stop();
+    this.audioEngine.releaseAll();
+    this.heldNotes.clear();
     if (this.animFrameId) {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
@@ -259,7 +268,7 @@ export class GameController {
   resume(): void {
     if (this.state !== 'paused') return;
     this.setState('playing');
-    this.timingEngine.start();
+    this.timingEngine.resume();
     this.heldNotes.clear();
     this.inputHandler.start((event: KeyEvent) => {
       if (event.type === 'down') {

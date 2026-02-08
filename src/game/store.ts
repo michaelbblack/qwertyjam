@@ -158,6 +158,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     returnToMenu: () => {
       controller.inputHandler.stop();
       controller.timingEngine.stop();
+      controller.audioEngine.releaseAll();
       set({
         screen: 'songSelect',
         gameState: 'idle',

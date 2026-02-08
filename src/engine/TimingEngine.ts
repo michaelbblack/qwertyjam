@@ -26,6 +26,7 @@ export class TimingEngine {
   noteSchedule: ScheduledNote[] = [];
   private running = false;
   private leadInBeats = 4; // beats of lead-in before first note
+  private pausedElapsed: number | null = null;
 
   constructor(bpm: number, speedMultiplier = 1.0) {
     this.bpm = bpm;
@@ -57,11 +58,24 @@ export class TimingEngine {
     // Offset start so getCurrentTime() begins negative, giving lead-in
     const leadInTime = this.beatToTime(this.leadInBeats);
     this.startTime = performance.now() / 1000 + leadInTime;
+    this.pausedElapsed = null;
     this.running = true;
   }
 
   stop(): void {
+    if (this.running) {
+      this.pausedElapsed = this.getCurrentTime();
+    }
     this.running = false;
+  }
+
+  resume(): void {
+    if (this.pausedElapsed !== null) {
+      // Restore startTime so getCurrentTime() continues from where it paused
+      this.startTime = performance.now() / 1000 - this.pausedElapsed;
+      this.pausedElapsed = null;
+    }
+    this.running = true;
   }
 
   isRunning(): boolean {
