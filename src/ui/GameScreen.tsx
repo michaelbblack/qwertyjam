@@ -1,3 +1,4 @@
+import { useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../game/store';
 import { NoteHighway } from './NoteHighway';
@@ -11,6 +12,26 @@ export function GameScreen() {
   const returnToMenu = useGameStore(s => s.returnToMenu);
   const metronome = useGameStore(s => s.metronome);
   const toggleMetronome = useGameStore(s => s.toggleMetronome);
+  const controller = useGameStore(s => s.controller);
+
+  // Keyboard shortcuts: Escape = pause/resume, - = metronome toggle
+  const handleGlobalKey = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      const state = controller.getState();
+      if (state === 'playing') controller.pause();
+      else if (state === 'paused') controller.resume();
+    }
+    if (e.key === '-' || e.key === '`') {
+      e.preventDefault();
+      toggleMetronome();
+    }
+  }, [controller, toggleMetronome]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [handleGlobalKey]);
 
   return (
     <div style={{
@@ -38,8 +59,13 @@ export function GameScreen() {
           </span>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.25)' }}>
+            [-] metronome &middot; [Esc] pause
+          </span>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={toggleMetronome}
+            tabIndex={-1}
             style={{
               background: metronome ? 'rgba(96,165,250,0.15)' : 'rgba(255,255,255,0.06)',
               border: `1px solid ${metronome ? '#60a5fa' : 'rgba(255,255,255,0.12)'}`,
@@ -54,7 +80,9 @@ export function GameScreen() {
             Metronome {metronome ? 'ON' : 'OFF'}
           </button>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={returnToMenu}
+            tabIndex={-1}
             style={{
               background: 'rgba(255,255,255,0.06)',
               border: '1px solid rgba(255,255,255,0.12)',
@@ -119,6 +147,69 @@ export function GameScreen() {
                 Loading...
               </div>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Pause overlay */}
+      <AnimatePresence>
+        {gameState === 'paused' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(10,14,26,0.85)',
+              zIndex: 100,
+              gap: '24px',
+            }}
+          >
+            <div style={{ fontSize: '48px', fontWeight: 800, color: '#fff' }}>
+              PAUSED
+            </div>
+            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>
+              Press Escape to resume
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+              <button
+                onClick={() => controller.resume()}
+                style={{
+                  background: 'linear-gradient(135deg, #60a5fa, #c084fc)',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '14px 28px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                }}
+              >
+                Resume
+              </button>
+              <button
+                onClick={returnToMenu}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '10px',
+                  padding: '14px 28px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                }}
+              >
+                Quit
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

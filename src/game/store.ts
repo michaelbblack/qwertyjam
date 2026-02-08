@@ -127,11 +127,12 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     startGame: async () => {
-      const { selectedSong, selectedLayer, speed } = get();
+      const { selectedSong, selectedLayer, speed, metronome } = get();
       if (!selectedSong) return;
 
       await controller.loadSong(selectedSong, selectedLayer);
       controller.setSpeed(speed);
+      controller.metronomeEnabled = metronome;
       set({
         screen: 'game',
         scoreState: null,

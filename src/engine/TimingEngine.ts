@@ -6,6 +6,7 @@ export interface ScheduledNote {
   time: number;      // absolute time in seconds from song start
   duration: number;   // duration in seconds
   beat: number;       // beat position in song
+  beatDuration: number; // duration in beats (preserved for setSpeed)
   hit: boolean;
   grade: TimingGrade | null;
   hitTime: number | null;
@@ -24,6 +25,7 @@ export class TimingEngine {
   private startTime: number = 0;
   noteSchedule: ScheduledNote[] = [];
   private running = false;
+  private leadInBeats = 4; // beats of lead-in before first note
 
   constructor(bpm: number, speedMultiplier = 1.0) {
     this.bpm = bpm;
@@ -44,6 +46,7 @@ export class TimingEngine {
       time: this.beatToTime(n.beat),
       duration: this.beatToTime(n.beat + n.duration) - this.beatToTime(n.beat),
       beat: n.beat,
+      beatDuration: n.duration,
       hit: false,
       grade: null,
       hitTime: null,
@@ -51,7 +54,9 @@ export class TimingEngine {
   }
 
   start(): void {
-    this.startTime = performance.now() / 1000;
+    // Offset start so getCurrentTime() begins negative, giving lead-in
+    const leadInTime = this.beatToTime(this.leadInBeats);
+    this.startTime = performance.now() / 1000 + leadInTime;
     this.running = true;
   }
 
@@ -64,12 +69,13 @@ export class TimingEngine {
   }
 
   // Get current elapsed time in seconds since song started
+  // Returns negative during lead-in
   getCurrentTime(): number {
     if (!this.running) return 0;
     return performance.now() / 1000 - this.startTime;
   }
 
-  // Get the current beat position
+  // Get the current beat position (negative during lead-in)
   getCurrentBeat(): number {
     const elapsed = this.getCurrentTime();
     const effectiveBpm = this.bpm * this.speedMultiplier;
@@ -160,23 +166,18 @@ export class TimingEngine {
 
   setSpeed(multiplier: number): void {
     this.speedMultiplier = Math.max(0.25, Math.min(2.0, multiplier));
-    // Rebuild schedule with new timing
-    const originalNotes = this.noteSchedule.map(n => ({
-      note: n.note,
-      beat: n.beat,
-      duration: n.beat + n.duration > 0 ? n.duration : 1,
-    }));
-    // Preserve hit state
+    // Rebuild from original beat data (not converted seconds)
     const hitState = this.noteSchedule.map(n => ({
       hit: n.hit,
       grade: n.grade,
       hitTime: n.hitTime,
     }));
-    this.buildSchedule(originalNotes.map(n => ({
+    const originalNotes = this.noteSchedule.map(n => ({
       note: n.note,
       beat: n.beat,
-      duration: n.duration,
-    })));
+      duration: n.beatDuration,
+    }));
+    this.buildSchedule(originalNotes);
     // Restore hit state
     hitState.forEach((state, i) => {
       if (i < this.noteSchedule.length) {

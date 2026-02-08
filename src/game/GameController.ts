@@ -84,6 +84,7 @@ export class GameController {
     this.currentLayer = layerIndex;
 
     await this.audioEngine.init();
+    this.audioEngine.setVoiceForGenre(song.genre);
 
     const layer = song.layers[layerIndex];
     if (!layer) throw new Error(`Layer ${layerIndex} not found`);
@@ -121,7 +122,7 @@ export class GameController {
 
     // Start input handling
     this.heldNotes.clear();
-    this.lastMetronomeBeat = -1;
+    this.lastMetronomeBeat = -100;
     this.inputHandler.start((event: KeyEvent) => {
       if (event.type === 'down') {
         this.handleKeyPress(event);
@@ -193,7 +194,7 @@ export class GameController {
     // Metronome
     if (this.metronomeEnabled) {
       const beat = Math.floor(this.timingEngine.getCurrentBeat());
-      if (beat > this.lastMetronomeBeat && beat >= 0) {
+      if (beat > this.lastMetronomeBeat) {
         this.lastMetronomeBeat = beat;
         const ts = this.currentSong?.timeSignature?.[0] ?? 4;
         this.audioEngine.playMetronomeTick(beat % ts === 0);

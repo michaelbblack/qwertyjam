@@ -20,6 +20,8 @@ export function SongSelect() {
   const speed = useGameStore(s => s.speed);
   const setSpeed = useGameStore(s => s.setSpeed);
   const setScreen = useGameStore(s => s.setScreen);
+  const metronome = useGameStore(s => s.metronome);
+  const toggleMetronome = useGameStore(s => s.toggleMetronome);
 
   const song = SONG_LIBRARY[selectedIdx];
 
@@ -171,6 +173,35 @@ export function SongSelect() {
               <span>2.0x</span>
             </div>
           </div>
+
+          {/* Metronome toggle */}
+          <button
+            onClick={toggleMetronome}
+            style={{
+              background: metronome ? 'rgba(96,165,250,0.15)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${metronome ? '#60a5fa' : 'rgba(255,255,255,0.08)'}`,
+              borderRadius: '8px',
+              padding: '10px 14px',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontFamily: 'inherit',
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span style={{ fontSize: '13px', color: '#fff', fontWeight: 600 }}>
+              Metronome
+            </span>
+            <span style={{
+              fontSize: '11px',
+              color: metronome ? '#60a5fa' : 'rgba(255,255,255,0.3)',
+              fontWeight: 700,
+            }}>
+              {metronome ? 'ON' : 'OFF'}
+            </span>
+          </button>
 
           {/* Play button */}
           <button
