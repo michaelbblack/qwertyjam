@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { SONG_LIBRARY } from '../data/songs';
 import { useGameStore } from '../game/store';
+import { getRecord, getBestGradeForSong } from '../game/records';
 import type { Song } from '../data/songs/types';
+import type { LetterGrade } from '../engine/ScoreEngine';
 
 const DIFFICULTY_STARS = ['', '\u2605', '\u2605\u2605', '\u2605\u2605\u2605', '\u2605\u2605\u2605\u2605', '\u2605\u2605\u2605\u2605\u2605'];
 
@@ -10,6 +12,15 @@ const GENRE_COLORS: Record<string, string> = {
   'Classical': '#c084fc',
   'Hip-Hop': '#fbbf24',
   'Alternative': '#34d399',
+};
+
+const GRADE_COLORS: Record<LetterGrade, string> = {
+  S: '#fbbf24',
+  A: '#34d399',
+  B: '#60a5fa',
+  C: '#c084fc',
+  D: '#f97316',
+  F: '#ef4444',
 };
 
 export function SongSelect() {
@@ -24,6 +35,12 @@ export function SongSelect() {
   const toggleMetronome = useGameStore(s => s.toggleMetronome);
 
   const song = SONG_LIBRARY[selectedIdx];
+
+  // Personal best for the currently selected song + layer
+  const record = useMemo(
+    () => getRecord(song.id, selectedLayer),
+    [song.id, selectedLayer],
+  );
 
   const handlePlay = async () => {
     selectSong(song, selectedLayer);
@@ -113,6 +130,49 @@ export function SongSelect() {
               <span style={{ color: '#fbbf24' }}>{DIFFICULTY_STARS[song.difficulty]}</span>
             </div>
           </div>
+
+          {/* Personal best */}
+          {record && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '8px',
+              padding: '10px 14px',
+            }}>
+              <div style={{
+                fontSize: '22px',
+                fontWeight: 800,
+                color: GRADE_COLORS[record.grade],
+                lineHeight: 1,
+              }}>
+                {record.grade}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '12px', color: '#fff', fontWeight: 700 }}>
+                  {record.score.toLocaleString()} pts
+                </div>
+                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>
+                  {record.accuracy.toFixed(1)}% · {record.maxCombo} combo · {record.plays} {record.plays === 1 ? 'play' : 'plays'}
+                </div>
+              </div>
+              {record.fullCombo && (
+                <span style={{
+                  fontSize: '9px',
+                  fontWeight: 800,
+                  color: '#f59e0b',
+                  border: '1px solid #f59e0b60',
+                  borderRadius: '4px',
+                  padding: '2px 6px',
+                  letterSpacing: '1px',
+                }}>
+                  FC
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Layer selection */}
           <div>
@@ -234,6 +294,7 @@ export function SongSelect() {
 
 function SongCard({ song, selected, onClick }: { song: Song; selected: boolean; onClick: () => void }) {
   const genreColor = GENRE_COLORS[song.genre] || '#888';
+  const bestGrade = getBestGradeForSong(song.id, song.layers.length);
 
   return (
     <button
@@ -300,6 +361,18 @@ function SongCard({ song, selected, onClick }: { song: Song; selected: boolean; 
         flexShrink: 0,
       }}>
         {song.genre}
+      </div>
+
+      {/* Earned grade badge */}
+      <div style={{
+        width: '24px',
+        textAlign: 'center',
+        fontSize: '16px',
+        fontWeight: 800,
+        color: bestGrade ? GRADE_COLORS[bestGrade] : 'rgba(255,255,255,0.12)',
+        flexShrink: 0,
+      }}>
+        {bestGrade ?? '–'}
       </div>
     </button>
   );

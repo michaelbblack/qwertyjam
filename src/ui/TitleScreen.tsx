@@ -1,6 +1,12 @@
 import { motion } from 'framer-motion';
 import { useGameStore } from '../game/store';
 
+const ORBS = [
+  { color: '#60a5fa', size: 360, x: '12%', y: '18%', duration: 14 },
+  { color: '#c084fc', size: 300, x: '72%', y: '60%', duration: 18 },
+  { color: '#f472b6', size: 240, x: '55%', y: '10%', duration: 22 },
+];
+
 export function TitleScreen() {
   const setScreen = useGameStore(s => s.setScreen);
 
@@ -13,7 +19,31 @@ export function TitleScreen() {
       minHeight: '100vh',
       fontFamily: '"JetBrains Mono", monospace',
       padding: '20px',
+      position: 'relative',
+      overflow: 'hidden',
     }}>
+      {/* Ambient background orbs */}
+      {ORBS.map((orb, i) => (
+        <motion.div
+          key={i}
+          animate={{
+            x: [0, 40, -30, 0],
+            y: [0, -30, 25, 0],
+          }}
+          transition={{ repeat: Infinity, duration: orb.duration, ease: 'easeInOut' }}
+          style={{
+            position: 'absolute',
+            left: orb.x,
+            top: orb.y,
+            width: orb.size,
+            height: orb.size,
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${orb.color}18 0%, transparent 70%)`,
+            pointerEvents: 'none',
+          }}
+        />
+      ))}
+
       {/* Logo */}
       <motion.div
         initial={{ opacity: 0, y: -30 }}

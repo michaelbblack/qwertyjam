@@ -103,27 +103,29 @@ export class TimingEngine {
     return lastNote.time + lastNote.duration + 2; // 2 second buffer
   }
 
-  // Grade a keypress — find the closest matching note and grade it
+  // Grade a keypress — find the closest matching note and grade it.
+  // deltaMs is signed: negative = early, positive = late.
   gradeInput(inputNote: string, inputTime: number): {
     grade: TimingGrade;
     noteIndex: number;
     deltaMs: number;
   } | null {
     const currentTime = inputTime;
-    let bestMatch: { index: number; delta: number } | null = null;
+    let bestMatch: { index: number; delta: number; signedDelta: number } | null = null;
 
     for (let i = 0; i < this.noteSchedule.length; i++) {
       const scheduled = this.noteSchedule[i];
       if (scheduled.hit) continue;
       if (scheduled.note !== inputNote) continue;
 
-      const delta = Math.abs(currentTime - scheduled.time) * 1000; // ms
+      const signedDelta = (currentTime - scheduled.time) * 1000; // ms
+      const delta = Math.abs(signedDelta);
 
       // Only consider notes within a reasonable window (500ms)
       if (delta > 500) continue;
 
       if (!bestMatch || delta < bestMatch.delta) {
-        bestMatch = { index: i, delta };
+        bestMatch = { index: i, delta, signedDelta };
       }
     }
 
@@ -150,7 +152,7 @@ export class TimingEngine {
     return {
       grade,
       noteIndex: bestMatch.index,
-      deltaMs,
+      deltaMs: bestMatch.signedDelta,
     };
   }
 

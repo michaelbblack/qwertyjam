@@ -3,14 +3,16 @@ import { GameController, type GameState, type GameResults, type NoteHitEvent } f
 import type { ScoreState } from '../engine/ScoreEngine';
 import type { TimingGrade } from '../engine/TimingEngine';
 import type { Song } from '../data/songs/types';
+import { saveResult, type RecordUpdate } from './records';
 
 // Screens
 export type Screen = 'title' | 'songSelect' | 'game' | 'results';
 
-interface RecentHit {
+export interface RecentHit {
   grade: TimingGrade;
   key: string;
   note: string;
+  deltaMs: number; // signed: negative = early, positive = late
   timestamp: number;
 }
 
@@ -35,6 +37,10 @@ interface GameStore {
   recentHits: RecentHit[];
   pressedKeys: Set<string>;
   lastGrade: TimingGrade | null;
+  lastDeltaMs: number | null;
+
+  // Record info for the most recent results screen
+  recordInfo: RecordUpdate | null;
 
   // Speed control
   speed: number;
@@ -68,7 +74,19 @@ export const useGameStore = create<GameStore>((set, get) => {
             countdownValue: null,
           });
           if (data === 'results') {
-            set({ screen: 'results' });
+            // Persist the run as a record before showing results
+            const results = controller.getResults();
+            let recordInfo: RecordUpdate | null = null;
+            if (results) {
+              recordInfo = saveResult(results.song.id, results.layerIndex, {
+                score: results.score.score,
+                accuracy: results.score.accuracy,
+                grade: results.grade,
+                maxCombo: results.score.maxCombo,
+                fullCombo: results.score.misses === 0 && results.score.totalNotes > 0,
+              });
+            }
+            set({ screen: 'results', recordInfo });
           }
         }
         break;
@@ -82,12 +100,14 @@ export const useGameStore = create<GameStore>((set, get) => {
             grade: hit.grade,
             key: hit.key,
             note: hit.note,
+            deltaMs: hit.deltaMs,
             timestamp: Date.now(),
           },
         ].slice(-10);
         set({
           recentHits: newHits,
           lastGrade: hit.grade,
+          lastDeltaMs: hit.deltaMs,
         });
         break;
       }
@@ -118,6 +138,8 @@ export const useGameStore = create<GameStore>((set, get) => {
     recentHits: [],
     pressedKeys: new Set(),
     lastGrade: null,
+    lastDeltaMs: null,
+    recordInfo: null,
 
     speed: 1.0,
     metronome: false,
@@ -138,6 +160,8 @@ export const useGameStore = create<GameStore>((set, get) => {
         scoreState: null,
         recentHits: [],
         lastGrade: null,
+        lastDeltaMs: null,
+        recordInfo: null,
       });
       await controller.startGame();
     },
@@ -166,6 +190,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         countdownValue: null,
         recentHits: [],
         lastGrade: null,
+        lastDeltaMs: null,
       });
     },
   };

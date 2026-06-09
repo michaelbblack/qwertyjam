@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { DEFAULT_KEYMAP, getRowKeys, ALL_ROWS, ROW_COLORS, type KeyRow } from '../data/keymap';
+import { DEFAULT_KEYMAP, getRowKeys, ALL_ROWS, ROW_COLORS, buildNoteToKeysMap, type KeyRow } from '../data/keymap';
 import { useGameStore } from '../game/store';
+
+const NOTE_TO_KEYS = buildNoteToKeysMap(DEFAULT_KEYMAP);
 
 interface KeyState {
   pressed: boolean;
@@ -8,10 +10,15 @@ interface KeyState {
   timestamp: number;
 }
 
+// Hint level for upcoming notes: the very next note is "next", notes soon after are "soon"
+type HintLevel = 'next' | 'soon';
+
 export function Keyboard() {
   const [keyStates, setKeyStates] = useState<Record<string, KeyState>>({});
+  const [hints, setHints] = useState<Record<string, HintLevel>>({});
   const recentHits = useGameStore(s => s.recentHits);
   const gameState = useGameStore(s => s.gameState);
+  const controller = useGameStore(s => s.controller);
 
   // Update key states from recent hits
   useEffect(() => {
@@ -28,6 +35,45 @@ export function Keyboard() {
     }
     setKeyStates(newStates);
   }, [recentHits]);
+
+  // Poll for upcoming notes to hint at the keys to press
+  useEffect(() => {
+    if (gameState !== 'playing') {
+      setHints({});
+      return;
+    }
+    const interval = setInterval(() => {
+      const currentTime = controller.timingEngine.getCurrentTime();
+      const schedule = controller.timingEngine.noteSchedule;
+      const newHints: Record<string, HintLevel> = {};
+      let nextFound = false;
+      for (const note of schedule) {
+        if (note.hit || note.grade === 'miss') continue;
+        const until = note.time - currentTime;
+        if (until < -0.1) continue;
+        if (until > 2) break;
+        const keys = NOTE_TO_KEYS[note.note];
+        if (!keys || keys.length === 0) continue;
+        const key = keys[0];
+        if (!nextFound) {
+          newHints[key] = 'next';
+          nextFound = true;
+        } else if (!newHints[key]) {
+          newHints[key] = 'soon';
+        }
+      }
+      setHints(prev => {
+        // Avoid re-render churn when nothing changed
+        const prevKeys = Object.keys(prev);
+        const nextKeys = Object.keys(newHints);
+        if (prevKeys.length === nextKeys.length && nextKeys.every(k => prev[k] === newHints[k])) {
+          return prev;
+        }
+        return newHints;
+      });
+    }, 80);
+    return () => clearInterval(interval);
+  }, [gameState, controller]);
 
   // Track physical key presses for visual feedback
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -67,13 +113,18 @@ export function Keyboard() {
           key={row}
           row={row}
           keyStates={keyStates}
+          hints={hints}
         />
       ))}
     </div>
   );
 }
 
-function KeyboardRow({ row, keyStates }: { row: KeyRow; keyStates: Record<string, KeyState> }) {
+function KeyboardRow({ row, keyStates, hints }: {
+  row: KeyRow;
+  keyStates: Record<string, KeyState>;
+  hints: Record<string, HintLevel>;
+}) {
   const keys = getRowKeys(row);
   const baseColor = ROW_COLORS[row];
   const offsetMap: Record<KeyRow, number> = { number: 0, top: 15, home: 25, bottom: 40 };
@@ -89,6 +140,7 @@ function KeyboardRow({ row, keyStates }: { row: KeyRow; keyStates: Record<string
         const note = DEFAULT_KEYMAP[key];
         const isPressed = state?.pressed;
         const grade = state?.grade;
+        const hint = hints[key];
 
         let bgColor = 'rgba(255,255,255,0.06)';
         let borderColor = 'rgba(255,255,255,0.12)';
@@ -118,6 +170,14 @@ function KeyboardRow({ row, keyStates }: { row: KeyRow; keyStates: Record<string
             borderColor = baseColor + '80';
             scale = 1.02;
           }
+        } else if (hint === 'next') {
+          bgColor = baseColor + '28';
+          borderColor = baseColor;
+          shadow = `0 0 10px ${baseColor}70`;
+          scale = 1.06;
+        } else if (hint === 'soon') {
+          bgColor = baseColor + '14';
+          borderColor = baseColor + '70';
         }
 
         return (
@@ -143,7 +203,7 @@ function KeyboardRow({ row, keyStates }: { row: KeyRow; keyStates: Record<string
             <span style={{
               fontSize: '13px',
               fontWeight: 700,
-              color: isPressed ? '#fff' : baseColor,
+              color: isPressed || hint === 'next' ? '#fff' : baseColor,
               fontFamily: '"JetBrains Mono", monospace',
             }}>
               {key === ';' ? ';' : key.toUpperCase()}

@@ -11,6 +11,7 @@ const GRADE_COLORS = {
 export function HUD() {
   const scoreState = useGameStore(s => s.scoreState);
   const lastGrade = useGameStore(s => s.lastGrade);
+  const lastDeltaMs = useGameStore(s => s.lastDeltaMs);
   const controller = useGameStore(s => s.controller);
   const gameState = useGameStore(s => s.gameState);
 
@@ -20,6 +21,7 @@ export function HUD() {
   const combo = scoreState?.combo ?? 0;
   const accuracy = scoreState?.accuracy ?? 100;
   const multiplier = controller.scoreEngine.getComboMultiplierValue();
+  const fever = combo >= 25;
 
   return (
     <div style={{
@@ -67,6 +69,17 @@ export function HUD() {
               }}
             >
               {lastGrade}
+              {lastGrade !== 'miss' && lastDeltaMs !== null && Math.abs(lastDeltaMs) > 25 && (
+                <div style={{
+                  fontSize: '9px',
+                  fontWeight: 600,
+                  color: 'rgba(255,255,255,0.45)',
+                  letterSpacing: '1px',
+                  marginTop: '2px',
+                }}>
+                  {lastDeltaMs < 0 ? `${Math.abs(Math.round(lastDeltaMs))}ms EARLY` : `${Math.round(lastDeltaMs)}ms LATE`}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -76,25 +89,29 @@ export function HUD() {
       <div style={{ textAlign: 'center' }}>
         <div style={{
           fontSize: '10px',
-          color: 'rgba(255,255,255,0.4)',
+          color: fever ? '#c084fc' : 'rgba(255,255,255,0.4)',
           textTransform: 'uppercase',
           letterSpacing: '2px',
         }}>
-          Combo
+          {fever ? '⚡ Fever' : 'Combo'}
         </div>
-        <div style={{
-          fontSize: '28px',
-          fontWeight: 800,
-          color: combo >= 50 ? '#f59e0b' : combo >= 25 ? '#c084fc' : combo >= 10 ? '#60a5fa' : '#fff',
-          lineHeight: 1,
-        }}>
+        <motion.div
+          animate={fever ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+          transition={fever ? { repeat: Infinity, duration: 0.6 } : undefined}
+          style={{
+            fontSize: '28px',
+            fontWeight: 800,
+            color: combo >= 50 ? '#f59e0b' : combo >= 25 ? '#c084fc' : combo >= 10 ? '#60a5fa' : '#fff',
+            lineHeight: 1,
+          }}
+        >
           {combo}
           {multiplier > 1 && (
             <span style={{ fontSize: '14px', color: '#c084fc', marginLeft: '4px' }}>
               x{multiplier}
             </span>
           )}
-        </div>
+        </motion.div>
       </div>
 
       {/* Accuracy */}

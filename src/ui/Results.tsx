@@ -26,6 +26,7 @@ export function Results() {
   const returnToMenu = useGameStore(s => s.returnToMenu);
   const selectSong = useGameStore(s => s.selectSong);
   const startGame = useGameStore(s => s.startGame);
+  const recordInfo = useGameStore(s => s.recordInfo);
 
   const results = useMemo(() => getResults(), [getResults]);
 
@@ -33,6 +34,8 @@ export function Results() {
 
   const { song, layerIndex, score, grade, speed } = results;
   const gradeColor = GRADE_COLORS[grade];
+  const fullCombo = score.misses === 0 && score.totalNotes > 0;
+  const newRecord = !!recordInfo && !recordInfo.firstPlay && recordInfo.newBestScore;
 
   const handleRetry = async () => {
     selectSong(song, layerIndex);
@@ -91,6 +94,45 @@ export function Results() {
         </div>
       </motion.div>
 
+      {/* Badges */}
+      {(fullCombo || newRecord) && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.55, type: 'spring', stiffness: 300 }}
+          style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '20px' }}
+        >
+          {newRecord && (
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 800,
+              color: '#34d399',
+              border: '1px solid #34d39960',
+              background: '#34d39915',
+              borderRadius: '6px',
+              padding: '6px 14px',
+              letterSpacing: '2px',
+            }}>
+              ★ NEW RECORD
+            </span>
+          )}
+          {fullCombo && (
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 800,
+              color: '#f59e0b',
+              border: '1px solid #f59e0b60',
+              background: '#f59e0b15',
+              borderRadius: '6px',
+              padding: '6px 14px',
+              letterSpacing: '2px',
+            }}>
+              ⚡ FULL COMBO
+            </span>
+          )}
+        </motion.div>
+      )}
+
       {/* Score */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -104,6 +146,11 @@ export function Results() {
         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', letterSpacing: '2px' }}>
           POINTS
         </div>
+        {recordInfo && !recordInfo.newBestScore && (
+          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '6px' }}>
+            Best: {recordInfo.record.score.toLocaleString()}
+          </div>
+        )}
       </motion.div>
 
       {/* Stats grid */}
