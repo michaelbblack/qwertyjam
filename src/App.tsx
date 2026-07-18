@@ -3,6 +3,9 @@ import { TitleScreen } from './ui/TitleScreen';
 import { SongSelect } from './ui/SongSelect';
 import { GameScreen } from './ui/GameScreen';
 import { Results } from './ui/Results';
+import { Profile } from './ui/Profile';
+import { Toasts } from './ui/Toasts';
+import { SettingsPanel } from './ui/SettingsPanel';
 
 function App() {
   const screen = useGameStore(s => s.screen);
@@ -13,6 +16,9 @@ function App() {
       {screen === 'songSelect' && <SongSelect />}
       {screen === 'game' && <GameScreen />}
       {screen === 'results' && <Results />}
+      {screen === 'profile' && <Profile />}
+      <Toasts />
+      <SettingsPanel />
     </div>
   );
 }

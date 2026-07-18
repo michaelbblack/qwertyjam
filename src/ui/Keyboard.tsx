@@ -19,6 +19,7 @@ export function Keyboard() {
   const recentHits = useGameStore(s => s.recentHits);
   const gameState = useGameStore(s => s.gameState);
   const controller = useGameStore(s => s.controller);
+  const hintsEnabled = useGameStore(s => s.settings.keyHints);
 
   // Update key states from recent hits
   useEffect(() => {
@@ -38,7 +39,7 @@ export function Keyboard() {
 
   // Poll for upcoming notes to hint at the keys to press
   useEffect(() => {
-    if (gameState !== 'playing') {
+    if (gameState !== 'playing' || !hintsEnabled) {
       setHints({});
       return;
     }
@@ -73,7 +74,7 @@ export function Keyboard() {
       });
     }, 80);
     return () => clearInterval(interval);
-  }, [gameState, controller]);
+  }, [gameState, controller, hintsEnabled]);
 
   // Track physical key presses for visual feedback
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

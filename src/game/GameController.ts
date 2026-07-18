@@ -28,6 +28,9 @@ export interface GameResults {
   score: ScoreState;
   grade: LetterGrade;
   speed: number;
+  // Per-note outcomes for the results timeline, in song order
+  timeline: Array<{ time: number; grade: TimingGrade | null }>;
+  duration: number;
 }
 
 export class GameController {
@@ -46,6 +49,7 @@ export class GameController {
   private countdownTimer: ReturnType<typeof setTimeout> | null = null;
   private heldNotes: Map<string, string> = new Map(); // key -> note being sustained
   metronomeEnabled = false;
+  inputOffsetMs = 0; // latency compensation: positive = inputs register late
   private lastMetronomeBeat = -1;
 
   constructor() {
@@ -112,10 +116,12 @@ export class GameController {
     await new Promise<void>((resolve) => {
       const tick = () => {
         if (count <= 0) {
+          this.audioEngine.playCountdownTick(true);
           resolve();
           return;
         }
         this.emit({ type: 'stateChange', data: `countdown:${count}` });
+        this.audioEngine.playCountdownTick(false);
         count--;
         this.countdownTimer = setTimeout(tick, 700);
       };
@@ -146,7 +152,7 @@ export class GameController {
     const note = this.keymap[event.key];
     if (!note) return;
 
-    const currentTime = this.timingEngine.getCurrentTime();
+    const currentTime = this.timingEngine.getCurrentTime() - this.inputOffsetMs / 1000;
     const result = this.timingEngine.gradeInput(note, currentTime);
 
     if (result) {
@@ -249,6 +255,8 @@ export class GameController {
       score: this.scoreEngine.getState(),
       grade: this.scoreEngine.getLetterGrade(),
       speed: this.timingEngine.speedMultiplier,
+      timeline: this.timingEngine.noteSchedule.map(n => ({ time: n.time, grade: n.grade })),
+      duration: this.timingEngine.getSongDuration(),
     };
   }
 

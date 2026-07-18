@@ -4,9 +4,11 @@ import type { ScoreState } from '../engine/ScoreEngine';
 import type { TimingGrade } from '../engine/TimingEngine';
 import type { Song } from '../data/songs/types';
 import { saveResult, type RecordUpdate } from './records';
+import { recordGameResult, type ProgressUpdate } from './progression';
+import { loadSettings, saveSettings, type GameSettings } from './settings';
 
 // Screens
-export type Screen = 'title' | 'songSelect' | 'game' | 'results';
+export type Screen = 'title' | 'songSelect' | 'game' | 'results' | 'profile';
 
 export interface RecentHit {
   grade: TimingGrade;
@@ -14,6 +16,13 @@ export interface RecentHit {
   note: string;
   deltaMs: number; // signed: negative = early, positive = late
   timestamp: number;
+}
+
+export interface Toast {
+  id: number;
+  icon: string;
+  title: string;
+  desc: string;
 }
 
 interface GameStore {
@@ -39,8 +48,20 @@ interface GameStore {
   lastGrade: TimingGrade | null;
   lastDeltaMs: number | null;
 
-  // Record info for the most recent results screen
+  // Results metadata
   recordInfo: RecordUpdate | null;
+  progressInfo: ProgressUpdate | null;
+
+  // Settings
+  settings: GameSettings;
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
+  updateSettings: (patch: Partial<GameSettings>) => void;
+
+  // Toasts (achievement popups etc.)
+  toasts: Toast[];
+  pushToast: (toast: Omit<Toast, 'id'>) => void;
+  dismissToast: (id: number) => void;
 
   // Speed control
   speed: number;
@@ -58,6 +79,11 @@ interface GameStore {
 }
 
 const controller = new GameController();
+const initialSettings = loadSettings();
+controller.inputOffsetMs = initialSettings.inputOffsetMs;
+controller.audioEngine.setVolume(initialSettings.volume);
+
+let toastCounter = 0;
 
 export const useGameStore = create<GameStore>((set, get) => {
   // Set up controller event listeners
@@ -74,9 +100,10 @@ export const useGameStore = create<GameStore>((set, get) => {
             countdownValue: null,
           });
           if (data === 'results') {
-            // Persist the run as a record before showing results
+            // Persist the run: records, XP, achievements — then show results
             const results = controller.getResults();
             let recordInfo: RecordUpdate | null = null;
+            let progressInfo: ProgressUpdate | null = null;
             if (results) {
               recordInfo = saveResult(results.song.id, results.layerIndex, {
                 score: results.score.score,
@@ -85,8 +112,21 @@ export const useGameStore = create<GameStore>((set, get) => {
                 maxCombo: results.score.maxCombo,
                 fullCombo: results.score.misses === 0 && results.score.totalNotes > 0,
               });
+              progressInfo = recordGameResult(results);
+              controller.audioEngine.playResultJingle(results.grade);
+              // Toast each new achievement
+              for (const ach of progressInfo.newAchievements) {
+                get().pushToast({ icon: ach.icon, title: ach.name, desc: ach.desc });
+              }
+              if (progressInfo.levelAfter > progressInfo.levelBefore) {
+                get().pushToast({
+                  icon: '🆙',
+                  title: `Level ${progressInfo.levelAfter}!`,
+                  desc: 'Keep playing to unlock more',
+                });
+              }
             }
-            set({ screen: 'results', recordInfo });
+            set({ screen: 'results', recordInfo, progressInfo });
           }
         }
         break;
@@ -140,6 +180,28 @@ export const useGameStore = create<GameStore>((set, get) => {
     lastGrade: null,
     lastDeltaMs: null,
     recordInfo: null,
+    progressInfo: null,
+
+    settings: initialSettings,
+    settingsOpen: false,
+    setSettingsOpen: (open) => set({ settingsOpen: open }),
+    updateSettings: (patch) => {
+      const settings = { ...get().settings, ...patch };
+      saveSettings(settings);
+      controller.inputOffsetMs = settings.inputOffsetMs;
+      controller.audioEngine.setVolume(settings.volume);
+      set({ settings });
+    },
+
+    toasts: [],
+    pushToast: (toast) => {
+      const id = ++toastCounter;
+      set({ toasts: [...get().toasts, { ...toast, id }] });
+      setTimeout(() => get().dismissToast(id), 4500);
+    },
+    dismissToast: (id) => {
+      set({ toasts: get().toasts.filter(t => t.id !== id) });
+    },
 
     speed: 1.0,
     metronome: false,
@@ -162,6 +224,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         lastGrade: null,
         lastDeltaMs: null,
         recordInfo: null,
+        progressInfo: null,
       });
       await controller.startGame();
     },

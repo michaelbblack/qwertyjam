@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../game/store';
+import { loadProgress, getLevelInfo } from '../game/progression';
 
 const ORBS = [
   { color: '#60a5fa', size: 360, x: '12%', y: '18%', duration: 14 },
@@ -9,6 +11,9 @@ const ORBS = [
 
 export function TitleScreen() {
   const setScreen = useGameStore(s => s.setScreen);
+  const setSettingsOpen = useGameStore(s => s.setSettingsOpen);
+
+  const levelInfo = useMemo(() => getLevelInfo(loadProgress().xp), []);
 
   return (
     <div style={{
@@ -116,6 +121,46 @@ export function TitleScreen() {
         >
           PLAY
         </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={() => setScreen('profile')}
+            style={{
+              flex: 1,
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '12px',
+              padding: '14px',
+              color: 'rgba(255,255,255,0.75)',
+              fontSize: '12px',
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              letterSpacing: '2px',
+              textTransform: 'uppercase',
+            }}
+          >
+            Profile{levelInfo.level > 1 ? ` · LV ${levelInfo.level}` : ''}
+          </button>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            style={{
+              flex: 1,
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '12px',
+              padding: '14px',
+              color: 'rgba(255,255,255,0.75)',
+              fontSize: '12px',
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              letterSpacing: '2px',
+              textTransform: 'uppercase',
+            }}
+          >
+            Settings
+          </button>
+        </div>
       </motion.div>
 
       {/* Keyboard hint */}

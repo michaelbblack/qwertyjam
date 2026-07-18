@@ -29,6 +29,8 @@ export const GENRE_VOICE_MAP: Record<string, VoicePreset> = {
   'Rock': 'organ',
   'Hip-Hop': 'pluck',
   'Alternative': 'pad',
+  'Folk': 'pluck',
+  'Ragtime': 'piano',
 };
 
 export class AudioEngine {
@@ -165,6 +167,40 @@ export class AudioEngine {
       this.metronomeSynth.triggerAttackRelease(note, '64n', Tone.now());
     } catch (e) {
       console.error('playMetronomeTick error:', e);
+    }
+  }
+
+  // Short blip during the 3-2-1 countdown; higher pitch on "go"
+  playCountdownTick(go: boolean): void {
+    if (!this.synth) return;
+    try {
+      const note = go ? 'A5' : 'A4';
+      this.synth.triggerAttackRelease(note, '16n', Tone.now(), go ? 0.5 : 0.3);
+    } catch (e) {
+      console.error('playCountdownTick error:', e);
+    }
+  }
+
+  // Grade-based jingle for the results screen
+  playResultJingle(grade: 'S' | 'A' | 'B' | 'C' | 'D' | 'F'): void {
+    if (!this.synth) return;
+    const sequences: Record<string, string[]> = {
+      S: ['C5', 'E5', 'G5', 'C6', 'E6'],
+      A: ['C5', 'E5', 'G5', 'C6'],
+      B: ['C5', 'E5', 'G5'],
+      C: ['C5', 'G5'],
+      D: ['E4', 'C4'],
+      F: ['E4', 'D#4', 'D4'],
+    };
+    const notes = sequences[grade] ?? sequences.C;
+    try {
+      notes.forEach((note, i) => {
+        setTimeout(() => {
+          this.synth?.triggerAttackRelease(note, '8n', Tone.now(), 0.4);
+        }, i * 110);
+      });
+    } catch (e) {
+      console.error('playResultJingle error:', e);
     }
   }
 

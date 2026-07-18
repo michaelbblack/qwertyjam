@@ -1,17 +1,19 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { SONG_LIBRARY } from '../data/songs';
 import { useGameStore } from '../game/store';
 import { getRecord, getBestGradeForSong } from '../game/records';
 import type { Song } from '../data/songs/types';
 import type { LetterGrade } from '../engine/ScoreEngine';
 
-const DIFFICULTY_STARS = ['', '\u2605', '\u2605\u2605', '\u2605\u2605\u2605', '\u2605\u2605\u2605\u2605', '\u2605\u2605\u2605\u2605\u2605'];
+const DIFFICULTY_STARS = ['', '★', '★★', '★★★', '★★★★', '★★★★★'];
 
 const GENRE_COLORS: Record<string, string> = {
   'Rock': '#ef4444',
   'Classical': '#c084fc',
   'Hip-Hop': '#fbbf24',
   'Alternative': '#34d399',
+  'Folk': '#38bdf8',
+  'Ragtime': '#f472b6',
 };
 
 const GRADE_COLORS: Record<LetterGrade, string> = {
@@ -23,8 +25,18 @@ const GRADE_COLORS: Record<LetterGrade, string> = {
   F: '#ef4444',
 };
 
+// A layer is locked if it declares a threshold and the previous layer's best accuracy is below it
+function isLayerLocked(song: Song, layerIndex: number): boolean {
+  if (layerIndex === 0) return false;
+  const threshold = song.layers[layerIndex].unlockThreshold;
+  if (threshold === undefined) return false;
+  const prevRecord = getRecord(song.id, layerIndex - 1);
+  return (prevRecord?.accuracy ?? 0) < threshold;
+}
+
 export function SongSelect() {
-  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [genreFilter, setGenreFilter] = useState<string>('All');
+  const [selectedId, setSelectedId] = useState<string>(SONG_LIBRARY[0].id);
   const [selectedLayer, setSelectedLayer] = useState(0);
   const selectSong = useGameStore(s => s.selectSong);
   const startGame = useGameStore(s => s.startGame);
@@ -33,25 +45,76 @@ export function SongSelect() {
   const setScreen = useGameStore(s => s.setScreen);
   const metronome = useGameStore(s => s.metronome);
   const toggleMetronome = useGameStore(s => s.toggleMetronome);
+  const setSettingsOpen = useGameStore(s => s.setSettingsOpen);
+  const settingsOpen = useGameStore(s => s.settingsOpen);
 
-  const song = SONG_LIBRARY[selectedIdx];
+  const genres = useMemo(
+    () => ['All', ...Array.from(new Set(SONG_LIBRARY.map(s => s.genre)))],
+    [],
+  );
 
-  // Personal best for the currently selected song + layer
+  const filteredSongs = useMemo(
+    () => genreFilter === 'All' ? SONG_LIBRARY : SONG_LIBRARY.filter(s => s.genre === genreFilter),
+    [genreFilter],
+  );
+
+  // Keep selection valid when the filter changes
+  useEffect(() => {
+    if (!filteredSongs.some(s => s.id === selectedId)) {
+      setSelectedId(filteredSongs[0]?.id ?? SONG_LIBRARY[0].id);
+      setSelectedLayer(0);
+    }
+  }, [filteredSongs, selectedId]);
+
+  const song = filteredSongs.find(s => s.id === selectedId) ?? filteredSongs[0] ?? SONG_LIBRARY[0];
+  const selectedIdx = filteredSongs.findIndex(s => s.id === song.id);
+
   const record = useMemo(
     () => getRecord(song.id, selectedLayer),
     [song.id, selectedLayer],
   );
 
-  const handlePlay = async () => {
+  const clearedCount = useMemo(
+    () => SONG_LIBRARY.filter(s => getBestGradeForSong(s.id, s.layers.length) !== null).length,
+    [],
+  );
+
+  const layerLocked = isLayerLocked(song, selectedLayer);
+
+  const handlePlay = useCallback(async () => {
+    if (isLayerLocked(song, selectedLayer)) return;
     selectSong(song, selectedLayer);
     await startGame();
-  };
+  }, [song, selectedLayer, selectSong, startGame]);
+
+  // Keyboard navigation: arrows + enter
+  useEffect(() => {
+    if (settingsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        const next = Math.max(0, Math.min(filteredSongs.length - 1, selectedIdx + dir));
+        setSelectedId(filteredSongs[next].id);
+        setSelectedLayer(0);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        setSelectedLayer(l => Math.max(0, Math.min(song.layers.length - 1, l + dir)));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handlePlay();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [filteredSongs, selectedIdx, song, settingsOpen, handlePlay]);
 
   return (
     <div style={{
-      maxWidth: '900px',
+      maxWidth: '960px',
       margin: '0 auto',
-      padding: '40px 20px',
+      padding: '32px 20px 48px',
       fontFamily: '"JetBrains Mono", monospace',
     }}>
       {/* Header */}
@@ -59,7 +122,7 @@ export function SongSelect() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: '30px',
+        marginBottom: '18px',
       }}>
         <button
           onClick={() => setScreen('title')}
@@ -74,28 +137,86 @@ export function SongSelect() {
             fontSize: '13px',
           }}
         >
-          &larr; Back
+          ← Back
         </button>
-        <h1 style={{
-          fontSize: '20px',
-          fontWeight: 800,
-          color: '#fff',
-          margin: 0,
-        }}>
-          SELECT SONG
-        </h1>
-        <div style={{ width: '80px' }} />
+        <div style={{ textAlign: 'center' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '2px' }}>
+            SELECT SONG
+          </h1>
+          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: '4px' }}>
+            {clearedCount}/{SONG_LIBRARY.length} cleared · ↑↓ song · ←→ layer · Enter play
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => setScreen('profile')}
+            style={{
+              background: 'none',
+              border: '1px solid rgba(255,255,255,0.2)',
+              color: 'rgba(255,255,255,0.6)',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '13px',
+            }}
+          >
+            👤
+          </button>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            style={{
+              background: 'none',
+              border: '1px solid rgba(255,255,255,0.2)',
+              color: 'rgba(255,255,255,0.6)',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '13px',
+            }}
+          >
+            ⚙
+          </button>
+        </div>
+      </div>
+
+      {/* Genre filter chips */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {genres.map((g) => {
+          const active = g === genreFilter;
+          const color = g === 'All' ? '#60a5fa' : (GENRE_COLORS[g] ?? '#888');
+          return (
+            <button
+              key={g}
+              onClick={() => setGenreFilter(g)}
+              style={{
+                background: active ? `${color}25` : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${active ? color : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: '20px',
+                padding: '5px 14px',
+                color: active ? color : 'rgba(255,255,255,0.5)',
+                fontSize: '11px',
+                fontWeight: 700,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              {g}
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ display: 'flex', gap: '24px' }}>
         {/* Song list */}
-        <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {SONG_LIBRARY.map((s, i) => (
+        <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
+          {filteredSongs.map((s) => (
             <SongCard
               key={s.id}
               song={s}
-              selected={i === selectedIdx}
-              onClick={() => { setSelectedIdx(i); setSelectedLayer(0); }}
+              selected={s.id === song.id}
+              onClick={() => { setSelectedId(s.id); setSelectedLayer(0); }}
             />
           ))}
         </div>
@@ -103,13 +224,17 @@ export function SongSelect() {
         {/* Song details panel */}
         <div style={{
           width: '340px',
+          flexShrink: 0,
           background: 'rgba(255,255,255,0.03)',
           borderRadius: '12px',
           border: '1px solid rgba(255,255,255,0.08)',
           padding: '24px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '20px',
+          gap: '18px',
+          alignSelf: 'flex-start',
+          position: 'sticky',
+          top: '20px',
         }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#fff' }}>
@@ -180,33 +305,49 @@ export function SongSelect() {
               Layer
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {song.layers.map((layer, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedLayer(i)}
-                  style={{
-                    background: i === selectedLayer ? 'rgba(96,165,250,0.15)' : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${i === selectedLayer ? '#60a5fa' : 'rgba(255,255,255,0.08)'}`,
-                    borderRadius: '8px',
-                    padding: '10px 14px',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  <div style={{ fontSize: '13px', color: '#fff', fontWeight: 600 }}>
-                    {layer.name}
-                  </div>
-                  {layer.description && (
-                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>
-                      {layer.description}
+              {song.layers.map((layer, i) => {
+                const locked = isLayerLocked(song, i);
+                const layerRecord = getRecord(song.id, i);
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedLayer(i)}
+                    style={{
+                      background: i === selectedLayer ? 'rgba(96,165,250,0.15)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${i === selectedLayer ? '#60a5fa' : 'rgba(255,255,255,0.08)'}`,
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'inherit',
+                      opacity: locked ? 0.6 : 1,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: '13px', color: '#fff', fontWeight: 600 }}>
+                        {locked ? '🔒 ' : ''}{layer.name}
+                      </div>
+                      {layerRecord && (
+                        <span style={{ fontSize: '13px', fontWeight: 800, color: GRADE_COLORS[layerRecord.grade] }}>
+                          {layerRecord.grade}
+                        </span>
+                      )}
                     </div>
-                  )}
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>
-                    {layer.notes.length} notes
-                  </div>
-                </button>
-              ))}
+                    {locked ? (
+                      <div style={{ fontSize: '10px', color: '#fbbf24', marginTop: '2px' }}>
+                        Requires {layer.unlockThreshold}% accuracy on {song.layers[i - 1].name}
+                      </div>
+                    ) : layer.description ? (
+                      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>
+                        {layer.description}
+                      </div>
+                    ) : null}
+                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>
+                      {layer.notes.length} notes
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -266,25 +407,28 @@ export function SongSelect() {
           {/* Play button */}
           <button
             onClick={handlePlay}
+            disabled={layerLocked}
             style={{
-              background: 'linear-gradient(135deg, #60a5fa, #c084fc)',
+              background: layerLocked
+                ? 'rgba(255,255,255,0.08)'
+                : 'linear-gradient(135deg, #60a5fa, #c084fc)',
               border: 'none',
               borderRadius: '12px',
               padding: '16px',
-              color: '#fff',
+              color: layerLocked ? 'rgba(255,255,255,0.35)' : '#fff',
               fontSize: '16px',
               fontWeight: 800,
               fontFamily: 'inherit',
-              cursor: 'pointer',
+              cursor: layerLocked ? 'not-allowed' : 'pointer',
               letterSpacing: '2px',
               textTransform: 'uppercase',
               transition: 'transform 0.1s',
             }}
-            onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
+            onMouseDown={(e) => { if (!layerLocked) e.currentTarget.style.transform = 'scale(0.97)'; }}
             onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
             onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
           >
-            PLAY
+            {layerLocked ? '🔒 LOCKED' : 'PLAY'}
           </button>
         </div>
       </div>

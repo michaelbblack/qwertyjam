@@ -66,7 +66,7 @@ export function NoteHighway() {
     lastFrameRef.current = frameNow;
 
     // Read reactive state without re-creating the draw loop
-    const { recentHits, scoreState } = useGameStore.getState();
+    const { recentHits, scoreState, settings } = useGameStore.getState();
     const combo = scoreState?.combo ?? 0;
     const fever = combo >= 25;
 
@@ -96,7 +96,7 @@ export function NoteHighway() {
     const strikeX = 160;
     const laneCount = 4;
     const laneH = H / laneCount;
-    const lookAhead = 4; // seconds to show ahead
+    const lookAhead = 4 / settings.scrollSpeed; // seconds of highway shown ahead
 
     const currentTime = controller.timingEngine.getCurrentTime();
     const timeToX = (t: number) => strikeX + ((t - currentTime) / lookAhead) * (W - strikeX);

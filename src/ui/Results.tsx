@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../game/store';
 import type { LetterGrade } from '../engine/ScoreEngine';
@@ -21,21 +21,55 @@ const GRADE_LABELS: Record<LetterGrade, string> = {
   F: 'FAILED',
 };
 
+const TIMELINE_COLORS: Record<string, string> = {
+  perfect: '#34d399',
+  great: '#60a5fa',
+  good: '#fbbf24',
+  miss: '#ef4444',
+};
+
+// Animate a number from 0 to target after an initial delay
+function useCountUp(target: number, delayMs: number, durationMs = 1100): number {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    let start: number | null = null;
+    const timer = setTimeout(() => {
+      const step = (ts: number) => {
+        if (start === null) start = ts;
+        const t = Math.min(1, (ts - start) / durationMs);
+        const eased = 1 - Math.pow(1 - t, 3);
+        setValue(Math.round(target * eased));
+        if (t < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }, delayMs);
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(raf);
+    };
+  }, [target, delayMs, durationMs]);
+  return value;
+}
+
 export function Results() {
   const getResults = useGameStore(s => s.getResults);
   const returnToMenu = useGameStore(s => s.returnToMenu);
   const selectSong = useGameStore(s => s.selectSong);
   const startGame = useGameStore(s => s.startGame);
   const recordInfo = useGameStore(s => s.recordInfo);
+  const progressInfo = useGameStore(s => s.progressInfo);
 
   const results = useMemo(() => getResults(), [getResults]);
+  const displayScore = useCountUp(results?.score.score ?? 0, 600);
 
   if (!results) return null;
 
-  const { song, layerIndex, score, grade, speed } = results;
+  const { song, layerIndex, score, grade, speed, timeline, duration } = results;
   const gradeColor = GRADE_COLORS[grade];
   const fullCombo = score.misses === 0 && score.totalNotes > 0;
   const newRecord = !!recordInfo && !recordInfo.firstPlay && recordInfo.newBestScore;
+  const leveledUp = !!progressInfo && progressInfo.levelAfter > progressInfo.levelBefore;
 
   const handleRetry = async () => {
     selectSong(song, layerIndex);
@@ -44,9 +78,9 @@ export function Results() {
 
   return (
     <div style={{
-      maxWidth: '600px',
+      maxWidth: '620px',
       margin: '0 auto',
-      padding: '60px 20px',
+      padding: '48px 20px 60px',
       fontFamily: '"JetBrains Mono", monospace',
       textAlign: 'center',
     }}>
@@ -73,7 +107,7 @@ export function Results() {
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.4, type: 'spring', stiffness: 200 }}
         style={{
-          margin: '40px auto',
+          margin: '32px auto 24px',
           width: '140px',
           height: '140px',
           borderRadius: '50%',
@@ -133,15 +167,15 @@ export function Results() {
         </motion.div>
       )}
 
-      {/* Score */}
+      {/* Score count-up */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
-        style={{ marginBottom: '32px' }}
+        style={{ marginBottom: '24px' }}
       >
-        <div style={{ fontSize: '40px', fontWeight: 800, color: '#fff' }}>
-          {score.score.toLocaleString()}
+        <div style={{ fontSize: '40px', fontWeight: 800, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
+          {displayScore.toLocaleString()}
         </div>
         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', letterSpacing: '2px' }}>
           POINTS
@@ -153,6 +187,43 @@ export function Results() {
         )}
       </motion.div>
 
+      {/* Performance timeline */}
+      {timeline.length > 0 && duration > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7 }}
+          style={{ marginBottom: '28px' }}
+        >
+          <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '6px', textAlign: 'left' }}>
+            Timeline
+          </div>
+          <div style={{
+            position: 'relative',
+            height: '36px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: '8px',
+            overflow: 'hidden',
+          }}>
+            {timeline.map((n, i) => (
+              <div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${Math.min(99, (n.time / duration) * 100)}%`,
+                  top: n.grade === 'miss' ? '55%' : '20%',
+                  width: '3px',
+                  height: '25%',
+                  borderRadius: '2px',
+                  background: n.grade ? TIMELINE_COLORS[n.grade] : 'rgba(255,255,255,0.2)',
+                }}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Stats grid */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -162,7 +233,7 @@ export function Results() {
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: '12px',
-          marginBottom: '32px',
+          marginBottom: '16px',
         }}
       >
         <StatBox label="Perfect" value={score.perfects} color="#34d399" />
@@ -179,7 +250,7 @@ export function Results() {
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
           gap: '12px',
-          marginBottom: '40px',
+          marginBottom: '24px',
         }}
       >
         <StatBox label="Accuracy" value={`${score.accuracy.toFixed(1)}%`} color="#c084fc" />
@@ -187,11 +258,50 @@ export function Results() {
         <StatBox label="Total Notes" value={score.totalNotes} color="rgba(255,255,255,0.5)" />
       </motion.div>
 
+      {/* XP bar */}
+      {progressInfo && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+          style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: '10px',
+            padding: '14px 18px',
+            marginBottom: '32px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: '#c084fc' }}>
+              +{progressInfo.xpGained} XP
+            </span>
+            <span style={{ fontSize: '11px', color: leveledUp ? '#fbbf24' : 'rgba(255,255,255,0.4)', fontWeight: leveledUp ? 800 : 400 }}>
+              {leveledUp
+                ? `🆙 LEVEL UP! ${progressInfo.levelBefore} → ${progressInfo.levelAfter}`
+                : `Level ${progressInfo.levelAfter}`}
+            </span>
+          </div>
+          <div style={{ height: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${progressInfo.levelInfo.progress * 100}%` }}
+              transition={{ delay: 1.2, duration: 0.8, ease: 'easeOut' }}
+              style={{
+                height: '100%',
+                background: 'linear-gradient(90deg, #60a5fa, #c084fc)',
+                borderRadius: '4px',
+              }}
+            />
+          </div>
+        </motion.div>
+      )}
+
       {/* Buttons */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1 }}
+        transition={{ delay: 1.1 }}
         style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}
       >
         <button
