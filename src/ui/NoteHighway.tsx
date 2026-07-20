@@ -281,11 +281,17 @@ export function NoteHighway() {
       ctx.arc(strikeX, y, size, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Early/late text for imperfect (but hit) notes
-      if (hit.grade !== 'miss' && hit.grade !== 'perfect' && Math.abs(hit.deltaMs) > 25) {
-        const label = hit.deltaMs < 0 ? 'EARLY' : 'LATE';
-        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.7})`;
-        ctx.font = 'bold 9px "JetBrains Mono", monospace';
+      // Early/late text for any pressed note that wasn't perfect.
+      // Off-time presses (grade 'miss' with a delta) get a louder orange label.
+      if (hit.grade !== 'perfect' && Math.abs(hit.deltaMs) > 25) {
+        const offTime = hit.grade === 'miss';
+        const label = offTime
+          ? (hit.deltaMs < 0 ? 'TOO EARLY' : 'TOO LATE')
+          : (hit.deltaMs < 0 ? 'EARLY' : 'LATE');
+        ctx.fillStyle = offTime
+          ? `rgba(249,115,22,${alpha})`
+          : `rgba(255,255,255,${alpha * 0.7})`;
+        ctx.font = `bold ${offTime ? 11 : 9}px "JetBrains Mono", monospace`;
         ctx.textAlign = 'center';
         ctx.fillText(label, strikeX, y - laneH * 0.42 - elapsed * 10);
         ctx.textAlign = 'left';

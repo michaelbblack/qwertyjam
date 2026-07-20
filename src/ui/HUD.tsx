@@ -62,14 +62,17 @@ export function HUD() {
               exit={{ scale: 0.8, opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
               style={{
-                fontSize: '20px',
+                fontSize: lastGrade === 'miss' && lastDeltaMs !== null ? '16px' : '20px',
                 fontWeight: 800,
-                color: GRADE_COLORS[lastGrade] || '#fff',
+                color: lastGrade === 'miss' && lastDeltaMs !== null ? '#f97316' : (GRADE_COLORS[lastGrade] || '#fff'),
                 textTransform: 'uppercase',
               }}
             >
-              {lastGrade}
-              {lastGrade !== 'miss' && lastDeltaMs !== null && Math.abs(lastDeltaMs) > 25 && (
+              {/* Off-time press (has a delta) reads TOO EARLY/LATE; a timed-out note reads MISS */}
+              {lastGrade === 'miss' && lastDeltaMs !== null
+                ? (lastDeltaMs < 0 ? 'Too Early' : 'Too Late')
+                : lastGrade}
+              {lastDeltaMs !== null && Math.abs(lastDeltaMs) > 25 && (
                 <div style={{
                   fontSize: '9px',
                   fontWeight: 600,

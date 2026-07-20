@@ -158,12 +158,12 @@ export class GameController {
     if (result) {
       const scoreState = this.scoreEngine.registerHit(result.grade);
 
-      // Sustain: start the note and track it for release
-      if (result.grade !== 'miss') {
-        this.audioEngine.attackNote(note, result.grade === 'perfect' ? 0.8 : 0.6);
-        this.heldNotes.set(event.key, note);
-      } else {
-        this.audioEngine.playMissSound();
+      // Sustain: always start the note and track it for release, even off-time —
+      // the melody keeps sounding; a separate thud marks the timing miss
+      this.audioEngine.attackNote(note, result.grade === 'perfect' ? 0.8 : result.grade === 'miss' ? 0.5 : 0.6);
+      this.heldNotes.set(event.key, note);
+      if (result.grade === 'miss') {
+        this.audioEngine.playOffTimeSound();
       }
 
       this.emit({

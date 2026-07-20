@@ -153,7 +153,7 @@ export class AudioEngine {
 
   private metronomeSynth: Tone.MembraneSynth | null = null;
 
-  playMetronomeTick(accent: boolean): void {
+  private ensureMetronomeSynth(): Tone.MembraneSynth {
     if (!this.metronomeSynth) {
       this.metronomeSynth = new Tone.MembraneSynth({
         pitchDecay: 0.008,
@@ -162,11 +162,25 @@ export class AudioEngine {
         volume: -4,
       }).toDestination();
     }
+    return this.metronomeSynth;
+  }
+
+  playMetronomeTick(accent: boolean): void {
     try {
       const note = accent ? 'G5' : 'C5';
-      this.metronomeSynth.triggerAttackRelease(note, '64n', Tone.now());
+      this.ensureMetronomeSynth().triggerAttackRelease(note, '64n', Tone.now());
     } catch (e) {
       console.error('playMetronomeTick error:', e);
+    }
+  }
+
+  // Dull percussive thunk layered under an off-time hit — the melodic note
+  // still plays through the main synth; this marks the timing miss
+  playOffTimeSound(): void {
+    try {
+      this.ensureMetronomeSynth().triggerAttackRelease('A1', '16n', Tone.now(), 0.7);
+    } catch (e) {
+      console.error('playOffTimeSound error:', e);
     }
   }
 

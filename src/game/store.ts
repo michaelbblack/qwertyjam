@@ -152,7 +152,8 @@ export const useGameStore = create<GameStore>((set, get) => {
         break;
       }
       case 'noteMiss': {
-        set({ lastGrade: 'miss' });
+        // Timed-out note (never pressed) — no timing delta to show
+        set({ lastGrade: 'miss', lastDeltaMs: null });
         break;
       }
       case 'scoreUpdate': {
